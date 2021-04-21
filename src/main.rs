@@ -44,6 +44,16 @@ struct PositionColorVertex {
     color: [f32; 3],
 }
 
+struct RenderContext {
+    vertex_layout: Arc<VertexDataSetLayout>,
+    material_pass: MaterialPass,
+    resource_context: ResourceContext,
+    resource_manager: ResourceManager,
+    graphics_queue: RafxQueue,
+    swapchain_helper: RafxSwapchainHelper,
+    device_context: RafxDeviceContext,
+}
+
 fn run() -> RafxResult<()> {
     //
     // Init SDL2 (winit and anything that uses raw-window-handle works too!)
@@ -98,7 +108,7 @@ fn run() -> RafxResult<()> {
         // rendering hardware is shared among them)
         //
         let graphics_queue = device_context.create_queue(RafxQueueType::Graphics)?;
-
+        // let held_graphics_queue = Arc::clone(&graphics_queue);
         //
         // Create a ResourceContext. The render registry is more useful when there's a variety of
         // things to render, but since we just have a triangle we'll just set up a single phase.
@@ -221,6 +231,16 @@ fn run() -> RafxResult<()> {
         let mut close_requested = false;
         let mut frame_time = Duration::from_millis(1000 / 60);
 
+        let mut render_context = RenderContext {
+            vertex_layout,
+            material_pass,
+            resource_context,
+            resource_manager,
+            graphics_queue,
+            swapchain_helper,
+            device_context,
+        };
+
         event_loop.run_return(move |event, _, control_flow| {
             use winit::event::{
                 ElementState::Released,
@@ -264,7 +284,8 @@ fn run() -> RafxResult<()> {
                                         // This is where you'll want to do any cleanup you need.
                                         println!("Buh-bye!");
                                         // Wait for all GPU work to complete before destroying resources it is using
-                                        graphics_queue
+                                        render_context
+                                            .graphics_queue
                                             .wait_for_queue_idle()
                                             .expect("wait_for_queue_idle");
 
@@ -292,13 +313,13 @@ fn run() -> RafxResult<()> {
                     //window.request_redraw();
                     render(
                         &window,
-                        &mut swapchain_helper,
-                        &graphics_queue,
-                        &mut resource_manager,
-                        &resource_context,
-                        &material_pass,
-                        &vertex_layout,
-                        &device_context,
+                        &mut render_context.swapchain_helper,
+                        &render_context.graphics_queue,
+                        &mut render_context.resource_manager,
+                        &render_context.resource_context,
+                        &render_context.material_pass,
+                        &render_context.vertex_layout,
+                        &render_context.device_context,
                         start_time,
                     );
                     let frame_end = Instant::now();
@@ -316,7 +337,7 @@ fn run() -> RafxResult<()> {
         });
 
         // Wait for all GPU work to complete before destroying resources it is using
-        // graphics_queue.wait_for_queue_idle()?;
+        //held_graphics_queue.wait_for_queue_idle()?;
     }
 
     // Optional, but calling this verifies that all rafx objects/device contexts have been
